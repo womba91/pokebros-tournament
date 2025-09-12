@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PokéBros Tournament</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#e3350d" />
+
+  <!-- iOS (Safari) -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="apple-touch-icon" href="images/icons/icon-192.png" />
+
+  <!-- Android/Chrome hint -->
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <link rel="icon" type="image/png" href="images/icons/icon-192.png">
+
+</head>
+
+<body>
+  <!-- Hero Section with background image + text -->
+  <header class="hero">
+    <h1>Tournament Tracker</h1>
+    <p class="subtitle">Swiss • 4 Rounds • Bye = 2 pts • Bonus (5+ PCR) = +2</p>
+  </header>
+
+  <!-- Players Section -->
+  <section class="card">
+    <h2>Players</h2>
+    <div class="row">
+      <input id="player-input" type="text" placeholder="Add player name…" />
+      <button id="add-player">Add Player</button>
+      <button id="clear-players" class="danger">Clear</button>
+    </div>
+    <ul id="players-list"></ul>
+  </section>
+
+  <!-- Rounds Section -->
+  <section class="card">
+    <h2>Rounds</h2>
+    <div class="row">
+      <label>Number of rounds</label>
+      <input id="rounds" type="number" min="1" max="9" value="4" />
+      <button id="build-rounds">Build Sheets</button>
+      <button id="random-r1">Randomise R1 Pairings</button>
+    </div>
+    <div id="rounds-container"></div>
+  </section>
+
+  <!-- Leaderboard Section -->
+  <section class="card">
+    <h2>Leaderboard</h2>
+    <table id="leaderboard">
+      <thead>
+        <tr><th>Rank</th><th>Player</th><th>Total</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div class="notes">Tiebreaker: Sudden-Death playoff (3 Prize Cards each).</div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <button id="save-data">Save</button>
+    <button id="load-demo">Load Demo (7 players)</button>
+    <button id="reset" class="danger">Reset All</button>
+    <span class="muted">Data is stored locally on your device.</span>
+  </footer>
+
+  <!-- Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js');
+      });
+    }
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>
