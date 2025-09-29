@@ -577,7 +577,7 @@ function buildCardDetailHtml(c) {
   const rt = c.retreatCost?.length ? c.retreatCost.length : '';
 
   return `
-    <div class="pb-modal-body" style="display:grid;grid-template-columns:220px 1fr;gap:16px;">
+    <div class="pb-modal-body">
       ${big ? `<img src="${big}" alt="${c.name} card image">` : ''}
       <div>
         <h3 id="card-modal-title" style="margin:0 0 6px;">${c.name}</h3>
