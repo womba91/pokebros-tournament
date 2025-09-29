@@ -168,10 +168,29 @@
   <!-- Scripts -->
   <script defer>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('service-worker.js');
+  navigator.serviceWorker.register('/service-worker.js').then(reg => {
+    // If a new SW is already waiting, activate it
+    if (reg.waiting) requestSkipWaiting(reg.waiting);
+
+    // Watch for a new SW installing and becoming 'installed'
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      nw?.addEventListener('statechange', () => {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+          requestSkipWaiting(nw);
+        }
       });
-    }
+    });
+  });
+}
+
+function requestSkipWaiting(worker) {
+  worker.postMessage({ type: 'SKIP_WAITING' });
+  worker.addEventListener('statechange', () => {
+    if (worker.state === 'activated') window.location.reload();
+  });
+}
+
   </script>
   <script src="app.js" defer></script>
 </body>
