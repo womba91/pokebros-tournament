@@ -248,3 +248,28 @@ button[disabled], .tab[aria-disabled="true"]{
   line-height: 1.3;
   min-height: 44px;
 }
+
+/* HERO: add top safe-area and more bottom space so title clears tabs */
+.hero{
+  /* keep your current background, etc. */
+  padding-top: calc(24px + env(safe-area-inset-top));   /* new */
+  padding-bottom: clamp(72px, 10vw, 104px);             /* more room under title */
+  background-position: center 20%;                      /* keeps logo visible */
+}
+
+/* TABS: keep sticky, but don't pull it upward over the hero */
+.tabs{
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  /* keep your padding/background/blur, but REMOVE this line if you have it: */
+  /* margin-top: calc(env(safe-area-inset-top) * -1); */
+  padding-top: 10px;                                    /* simple, no negative margin */
+}
+
+/* Whole page: let iOS reserve the notch area so nothing sits under it */
+@supports (padding: max(0px)) {
+  body {
+    padding-top: max(0px, env(safe-area-inset-top));
+  }
+}
