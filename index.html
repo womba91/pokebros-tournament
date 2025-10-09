@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PokéBros Tournament</title>
+  <!-- One clean viewport line -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
-  <!-- Meta -->
+  <title>PokéBros Tournament</title>
   <meta name="description" content="PokéBros Tournament Tracker PWA — players, Swiss pairings, match sheets, leaderboard, and Pokémon TCG card search." />
 
   <!-- PWA -->
@@ -15,13 +15,15 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="apple-touch-icon" href="images/icons/icon-192.png" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
+  <!-- Speed up first hit to your Worker -->
+  <link rel="preconnect" href="https://pokebros-proxy.womba91.workers.dev" crossorigin>
 
   <!-- Icons / Styles -->
   <link rel="icon" type="image/png" href="images/icons/icon-192.png">
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
@@ -112,7 +114,7 @@
         <h2 id="h2-cardsearch">Card Search</h2>
         <div class="row">
           <label for="tcg-query" class="visually-hidden">Card name</label>
-          <input id="tcg-query" type="text" placeholder="Search by name… (e.g., Gardevoir, Charizard)" />
+          <input id="tcg-query" type="text" inputmode="search" enterkeyhint="search" autocomplete="off" placeholder="Search by name… (e.g., Gardevoir, Charizard)" />
           <label for="tcg-type" class="visually-hidden">Card type</label>
           <select id="tcg-type">
             <option value="">Any Type</option>
@@ -150,14 +152,6 @@
     <button id="ai-clear" type="button" class="danger">Clear</button>
   </div>
 </div>
-
-        <div class="row">
-          <label for="tcg-api-key" class="visually-hidden">Pokémon TCG API key</label>
-          <input id="tcg-api-key" type="password" placeholder="Paste Pokémon TCG API key (saved locally)" style="min-width:280px" />
-          <button id="tcg-save-key" type="button">Save Key</button>
-          <button id="tcg-clear-results" class="danger" type="button">Clear Results</button>
-        </div>
-
         
       </section>
     </div>
@@ -168,32 +162,30 @@
   </noscript>
 
   <!-- Scripts -->
-  <script defer>
-    if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/service-worker.js').then(reg => {
-    // If a new SW is already waiting, activate it
-    if (reg.waiting) requestSkipWaiting(reg.waiting);
+ <script defer>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./service-worker.js', { scope: './' }).then(reg => {
+      if (reg.waiting) requestSkipWaiting(reg.waiting);
 
-    // Watch for a new SW installing and becoming 'installed'
-    reg.addEventListener('updatefound', () => {
-      const nw = reg.installing;
-      nw?.addEventListener('statechange', () => {
-        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-          requestSkipWaiting(nw);
-        }
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        nw?.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            requestSkipWaiting(nw);
+          }
+        });
       });
     });
-  });
-}
+  }
 
-function requestSkipWaiting(worker) {
-  worker.postMessage({ type: 'SKIP_WAITING' });
-  worker.addEventListener('statechange', () => {
-    if (worker.state === 'activated') window.location.reload();
-  });
-}
+  function requestSkipWaiting(worker) {
+    worker.postMessage({ type: 'SKIP_WAITING' });
+    worker.addEventListener('statechange', () => {
+      if (worker.state === 'activated') window.location.reload();
+    });
+  }
+</script>
 
-  </script>
   <script src="app.js" defer></script>
 </body>
 </html>
