@@ -241,3 +241,10 @@ button[disabled], .tab[aria-disabled="true"]{
 @media (max-width: 480px){
   .row input, .row select, .row textarea, .row button{ padding:10px 12px; }
 }
+
+/* iOS: prevent zoom on focus by ensuring >=16px */
+:where(input, select, textarea, button) {
+  font-size: 16px !important;
+  line-height: 1.3;
+  min-height: 44px;
+}
