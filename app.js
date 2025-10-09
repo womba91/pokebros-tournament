@@ -23,7 +23,6 @@ function load(){
   if (!state.stage) state.stage = { mode: 'setup', currentRound: 1 }; // backward compat
   clampStage();
 }
-
 function clampStage(){
   if (!state.rounds || state.rounds < 1) state.rounds = 1;
   if (!state.stage) state.stage = { mode:'setup', currentRound:1 };
@@ -41,10 +40,6 @@ function showSaving(){
 }
 function save(){ _save(); showSaving(); }
 
-// small utils
-function debounce(fn, ms=300){
-  let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); };
-}
 function optionList(options, selected=""){
   return options.map(o=>`<option value="${o}" ${o===selected?'selected':''}>${o}</option>`).join("");
 }
@@ -111,7 +106,7 @@ function renderPlayers(){
   });
 
   // hide/show add row + toggle row
-  const addRow   = $('#add-player-row');
+  const addRow    = $('#add-player-row');
   const toggleRow = $('#add-player-toggle');
   const hasPlayers = state.players.length > 0;
 
@@ -283,10 +278,9 @@ function renderRounds(){
     const byeSel = $(`#bye-${r}`);
     if (byeSel) byeSel.value = state.matches[r + '_bye'] || "";
 
-    // NEW: inline nav inside the round card
+    // inline nav inside the round card
     renderInlineRoundNav();
   } else {
-    // if we leave the round page, make sure inline nav is gone
     $('#stage-nav-inline')?.remove();
   }
 
@@ -408,7 +402,7 @@ function renderLeaderboards(){
 
   // Commit/Clear visibility
   const commitBtn = $('#commit-totals');
-  const clearBtn = $('#clear-current-matches');
+  const clearBtn  = $('#clear-current-matches');
   if (commitBtn) commitBtn.hidden = !(state.stage.mode === 'review');
   if (clearBtn)  clearBtn.hidden  = (state.stage.mode === 'review');
 }
@@ -455,10 +449,13 @@ function resetAll(){
 
 /* ========== CARD SEARCH (via Cloudflare Worker proxy — no client key) ========== */
 
-// 1) point to YOUR worker (keep /api suffix)
-const TCG_API_BASE = 'https://pokebros-proxy.womba91.workers.dev/api';
+// Cloudflare Worker bases
+const WORKER_BASE     = 'https://pokebros-proxy.womba91.workers.dev';
+const TCG_API_BASE    = `${WORKER_BASE}/api`;
+const META_API_BASE   = WORKER_BASE; // /meta/* lives at the worker root
+const AI_ENDPOINT     = `${WORKER_BASE}/ai/chat`;
 
-// 2) tiny in-memory cache (keeps UI snappy for repeated queries)
+// tiny in-memory cache (keeps UI snappy for repeated queries)
 const tcgCache = new Map();
 const TCG_CACHE_MS = 5 * 60 * 1000;
 const cacheGet = k => {
@@ -469,7 +466,7 @@ const cacheGet = k => {
 };
 const cacheSet = (k, d) => tcgCache.set(k, { ts: Date.now(), data: d });
 
-// 3) query builder
+// query builder
 function buildTcgQuery(name, type, standardOnly) {
   const parts = [];
   if (name) {
@@ -481,7 +478,7 @@ function buildTcgQuery(name, type, standardOnly) {
   return parts.join(' ');
 }
 
-// 4) fetch through the Worker (no headers, no key in browser)
+// fetch through the Worker (no headers, no key in browser)
 async function fetchCards({ name, type, standardOnly }) {
   const q = buildTcgQuery(name, type, standardOnly);
   const params = new URLSearchParams({ pageSize: '12', orderBy: 'name' });
@@ -500,7 +497,7 @@ async function fetchCards({ name, type, standardOnly }) {
   return cards;
 }
 
-// 5) renderer
+// renderer (grid + click-to-modal)
 function renderCardResults(cards){
   const host = $('#tcg-results');
   host.innerHTML = '';
@@ -515,8 +512,8 @@ function renderCardResults(cards){
     const mark = c.regulationMark || (c.set && c.set.regulationMark) || '?';
     const el = document.createElement('div');
     el.className = 'tcg-card';
-    el.tabIndex = 0;                      // make it focusable
-    el.setAttribute('role', 'button');    // a11y hint
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
     el.setAttribute('aria-label', `View details for ${c.name}`);
 
     el.innerHTML = `
@@ -546,20 +543,16 @@ function openCardModal(card) {
   body.innerHTML = buildCardDetailHtml(card);
   modal.removeAttribute('hidden');
 
-  // close handlers (click X, click backdrop, ESC)
   document.querySelector('#card-modal-close')?.addEventListener('click', closeCardModal, { once:true });
   modal.addEventListener('click', (e)=> { if (e.target === modal) closeCardModal(); }, { once:true });
   const onEsc = (e)=>{ if (e.key === 'Escape') { closeCardModal(); document.removeEventListener('keydown', onEsc); } };
   document.addEventListener('keydown', onEsc);
 
-  // focus
   setTimeout(()=> document.querySelector('#card-modal-close')?.focus(), 0);
 }
-
 function closeCardModal() {
   document.querySelector('#card-modal')?.setAttribute('hidden', '');
 }
-
 function buildCardDetailHtml(c) {
   const big = c.images?.large || c.images?.small || '';
   const types = (c.types || []).join(', ');
@@ -607,10 +600,7 @@ function buildCardDetailHtml(c) {
     </div>
   `;
 }
-
-function wireCardModal() {
-  // nothing to do now; kept in case you want to add global listeners later
-}
+function wireCardModal() { /* reserved for future global listeners */ }
 
 // Utility: remove all listeners from an element by replacing it with a clone
 function _stripAllListeners(selector){
@@ -621,7 +611,7 @@ function _stripAllListeners(selector){
   return clone;
 }
 
-// 6) one-time wiring for the Card Search UI (Enter-only; no API-key controls)
+// Card Search UI (Enter-only; no API-key controls)
 function wireCardSearch() {
   // Remove the old API-key row/UI if it still exists
   document.querySelector('#tcg-api-key')?.closest('.row')?.remove();
@@ -661,7 +651,7 @@ function wireCardSearch() {
     }
   });
 
-  // Optional: keep the button as a manual trigger
+  // Optional: if a search button exists, keep it as manual trigger
   searchBtn?.addEventListener('click', doSearch);
 
   // Keep Clear Results
@@ -670,6 +660,7 @@ function wireCardSearch() {
   });
 }
 
+/* ========== Trending Meta (via your Worker) ========== */
 async function wireTrendingMeta() {
   const hostPanel = document.querySelector("#panel-cards");
   if (!hostPanel) return;
@@ -685,7 +676,7 @@ async function wireTrendingMeta() {
       <div id="meta-trending-list" class="notes">Loading…</div>
       <div id="meta-matchups" style="margin-top:12px"></div>
     `;
-    // put it under your card-search controls (adjust if needed)
+    // put it under the card-search results card
     const anchor = document.querySelector("#tcg-results")?.closest(".card") || hostPanel;
     anchor.insertAdjacentElement("afterend", box);
   }
@@ -694,9 +685,8 @@ async function wireTrendingMeta() {
   const muHost = box.querySelector("#meta-matchups");
 
   try {
-    const base = location.origin; // same domain through your Worker
-    const meta = await fetch(`${base}/meta/top-decks?format=STANDARD&days=30`).then(r => r.json());
-    const rows = meta.top.slice(0, 12).map((d, i) =>
+    const meta = await fetch(`${META_API_BASE}/meta/top-decks?format=STANDARD&days=30`).then(r => r.json());
+    const rows = (meta.top || []).slice(0, 12).map((d, i) =>
       `<div style="display:flex;gap:8px;align-items:center">
          <span style="min-width:1.5em;text-align:right">${i+1}.</span>
          <strong>${d.name}</strong>
@@ -710,8 +700,7 @@ async function wireTrendingMeta() {
 
   // Optional: compact matchup table for top 6
   try {
-    const base = location.origin;
-    const data = await fetch(`${base}/meta/matchups?format=STANDARD&days=30&limitDecks=6`).then(r => r.json());
+    const data = await fetch(`${META_API_BASE}/meta/matchups?format=STANDARD&days=30&limitDecks=6`).then(r => r.json());
     const decks = data.decks || [];
     const table = data.table || {};
 
@@ -744,15 +733,13 @@ async function wireTrendingMeta() {
 }
 
 /* ========== AI Assistant (Cloudflare Workers AI) ========== */
-const AI_ENDPOINT = 'https://pokebros-proxy.womba91.workers.dev/ai/chat';
-
 function wireAiAssistant(){
   const box   = document.querySelector('#ai-input');
   const btn   = document.querySelector('#ai-send');
   const clear = document.querySelector('#ai-clear');
   const msgs  = document.querySelector('#ai-messages');
 
-  if (!box || !btn || !msgs) return; // AI panel not on page
+  if (!box || !btn || !msgs) return;
 
   function addMsg(role, text){
     const wrap = document.createElement('div');
@@ -875,10 +862,10 @@ function renderStageBar(){
     });
   }
 
-  // NEW: top-right Start button (behaves like "Next" from setup)
+  // top-right Start button (same as "Next" from setup)
   bar.querySelector('#stage-start-top')?.addEventListener('click', onStageNext);
 
-  // keep bottom nav in sync (and we’ll hide it on setup)
+  // keep bottom nav in sync
   renderStageNavBottom();
 }
 
@@ -905,7 +892,7 @@ function renderStageNavBottom(){
   }
   nav.hidden = false;
 
-  // Review page content (unchanged)
+  // Review page content
   const prevLabel = `Back: Round ${state.rounds}`;
   const nextLabel = 'Submit Results';
 
@@ -921,7 +908,6 @@ function renderStageNavBottom(){
 }
 
 function renderInlineRoundNav(){
-  // only on round pages
   if (state.stage.mode !== 'round') {
     $('#stage-nav-inline')?.remove();
     return;
@@ -931,7 +917,6 @@ function renderInlineRoundNav(){
   const roundCard = rc?.querySelector('.round');
   if (!roundCard) return;
 
-  // compute labels (same logic you already use)
   const prevLabel =
     state.stage.currentRound === 1 ? 'Back to Setup' :
     `Previous: Round ${state.stage.currentRound - 1}`;
@@ -944,7 +929,6 @@ function renderInlineRoundNav(){
   if (!nav){
     nav = document.createElement('div');
     nav.id = 'stage-nav-inline';
-    // card-ish row centered
     nav.className = 'row';
     nav.style.cssText = 'justify-content:center;gap:12px;margin-top:16px;';
     roundCard.appendChild(nav);
@@ -955,7 +939,6 @@ function renderInlineRoundNav(){
     <button id="stage-next-inline">${nextLabel}</button>
   `;
 
-  // wire buttons
   nav.querySelector('#stage-prev-inline')?.addEventListener('click', onStagePrev);
   nav.querySelector('#stage-next-inline')?.addEventListener('click', onStageNext);
 }
@@ -1037,12 +1020,10 @@ function ensureInlineRoundLeaderboard(){
   const rc = $('#rounds-container');
   if (!rc) return;
 
-  // Remove old inline leaderboard if any
   rc.querySelector('#inline-lb')?.remove();
 
   if (state.stage.mode !== 'round') return;
 
-  // Build a simple inline leaderboard (current match only)
   const wrap = document.createElement('div');
   wrap.id = 'inline-lb';
   wrap.className = 'card';

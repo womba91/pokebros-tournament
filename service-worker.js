@@ -1,139 +1,98 @@
-// service-worker.js
-// PokeBros PWA — safe caching (skip chrome-extension/mozilla-extension/etc)
+// ----------------- service-worker.js -----------------
 
-const CACHE_NAME = 'pweb-cache-v5'; // bump when you deploy
-const ASSETS = [
-  '/',                 // keep if you serve index at /
-  '/index.html',
-  '/style.css',
-  '/app.js',
-  '/manifest.json',
-  '/images/logo.png',
-  '/images/icons/icon-192.png',
-  '/images/icons/icon-512.png'
+// Bump this each release to force a fresh cache
+const CACHE_VERSION = 'v2.1.0';
+const CACHE_NAME    = `pokebros-${CACHE_VERSION}`;
+
+// Files to precache (relative to the worker *scope*, so this works on GitHub Pages)
+const PRECACHE = [
+  'index.html',
+  'style.css',
+  'app.js',
+  'manifest.json',
+  'images/logo.png',
+  'images/icons/icon-192.png',
+  'images/icons/icon-512.png'
 ];
 
+// Helper: resolve a path against this worker's scope
+const urlFromScope = (p) => new URL(p, self.registration.scope).toString();
+
+/* Install: precache and activate immediately */
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then(cache =>
+      cache.addAll(PRECACHE.map(urlFromScope))
+    )
   );
+  self.skipWaiting();
 });
 
+/* Activate: clean old versions and take control */
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
+    await Promise.all(
+      keys
+        .filter(k => k.startsWith('pokebros-') && k !== CACHE_NAME)
+        .map(k => caches.delete(k))
+    );
     await self.clients.claim();
   })());
 });
 
-// Only handle GET + http(s) + same-origin. Ignore chrome-extension, data:, file:, etc.
+/* Fetch strategy
+   - Navigations: network-first, fallback to cached index.html
+   - Same-origin requests: stale-while-revalidate
+   - Cross-origin or non-GET: passthrough
+*/
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-
-  // 1) Method guard
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
 
-  // 2) Protocol guard
+  // Only care about http(s)
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
-  // 3) Navigation requests: network-first, fallback to cached index for offline
+  // 1) Navigations (address-bar loads, SPA reloads)
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
       try {
-        // Try live network first
+        // Live first
         const fresh = await fetch(req);
         return fresh;
       } catch {
-        // Offline fallback
-        const cached = await caches.match('/index.html');
+        // Fallback to precached index
+        const cached = await caches.match(urlFromScope('index.html'));
         return cached || new Response('Offline', { status: 503, statusText: 'Offline' });
       }
     })());
     return;
   }
 
-  // 4) Same-origin static assets: cache-first with background refresh
+  // 2) Same-origin static: stale-while-revalidate
   if (url.origin === self.location.origin) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(req);
-      if (cached) {
-        // refresh in background (don’t fail page if it errors)
-        event.waitUntil(fetch(req).then(res => {
-          if (res && res.ok) cache.put(req, res.clone());
-        }).catch(() => {}));
-        return cached;
-      }
-      try {
-        const fresh = await fetch(req);
-        if (fresh && fresh.ok) await cache.put(req, fresh.clone());
-        return fresh;
-      } catch {
-        // last resort: give whatever we had
-        return cached || Response.error();
-      }
+
+      const fetchAndUpdate = fetch(req).then(resp => {
+        if (resp && resp.ok) cache.put(req, resp.clone());
+        return resp;
+      }).catch(() => undefined);
+
+      // Return cached immediately if present, otherwise wait for network
+      return cached || (await fetchAndUpdate) || new Response('', { status: 504 });
     })());
     return;
   }
 
-  // 5) Cross-origin: do not cache (avoids chrome-extension, analytics, etc.)
-  // Just let the browser handle it normally.
+  // 3) Cross-origin: let the browser handle it (don’t cache)
   return;
 });
-// ----------------- service-worker.js (PWA) -----------------
-const CACHE_VERSION = 'v2.0.0-2025-09-23';     // <— bump for each release
-const CACHE_NAME    = `pokebros-${CACHE_VERSION}`;
 
-// List what you want precached at install (keep/extend your current list)
-const PRECACHE_URLS = [
-  '/',               // for GitHub Pages this is your repo page root
-  '/index.html',
-  '/app.js',
-  '/style.css',
-  '/images/favicon.png'
-];
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE_URLS))
-  );
-  // Activate immediately without waiting for page reload
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (event) => {
-  // Remove old cache versions, then take control of open pages
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(k => k.startsWith('pokebros-') && k !== CACHE_NAME)
-          .map(k => caches.delete(k))
-      )
-    ).then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', (event) => {
-  // Cache-first with background update (good default)
-  if (event.request.method !== 'GET') return;
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      const fetchAndCache = fetch(event.request).then(resp => {
-        const copy = resp.clone();
-        caches.open(CACHE_NAME).then(c => c.put(event.request, copy)).catch(()=>{});
-        return resp;
-      });
-      return cached || fetchAndCache;
-    })
-  );
-});
-
-// Optional: allow the page to tell the SW to activate now
+/* Allow page to trigger immediate activate */
 self.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
